@@ -27,9 +27,9 @@ from opentelemetry.semconv._incubating.attributes import (
 from opentelemetry.semconv._incubating.attributes import (
     server_attributes as ServerAttributes,
 )
+from opentelemetry.util.genai.invocation import InferenceInvocation
 from opentelemetry.util.genai.types import (
     InputMessage,
-    LLMInvocation,
     MessagePart,
     OutputMessage,
 )
@@ -155,7 +155,7 @@ def get_output_messages_from_message(
 
 
 def set_invocation_response_attributes(
-    invocation: LLMInvocation,
+    invocation: InferenceInvocation,
     message: Message | None,
     capture_content: bool,
 ) -> None:
