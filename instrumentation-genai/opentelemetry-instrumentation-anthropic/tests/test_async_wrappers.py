@@ -229,7 +229,7 @@ def test_sync_stream_wrapper_close_failure_fails_and_reraises():
 
     assert stream.close_calls == 1
     assert failures == [error]
-    assert stopped == []
+    assert not stopped
 
 
 def test_sync_stream_wrapper_processes_events_and_stops_on_completion():
@@ -443,7 +443,7 @@ async def test_async_stream_wrapper_close_failure_fails_and_reraises():
 
     assert stream.close_calls == 1
     assert failures == [error]
-    assert stopped == []
+    assert not stopped
 
 
 @pytest.mark.asyncio

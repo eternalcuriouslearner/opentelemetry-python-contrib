@@ -162,8 +162,7 @@ class MessagesStreamWrapper(
         except Exception as exc:
             self._fail(exc)
             raise
-        else:
-            self._stop()
+        self._stop()
 
     def __iter__(self) -> "MessagesStreamWrapper[ResponseFormatT]":
         return self
@@ -283,8 +282,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
         except Exception as exc:
             self._fail(exc)
             raise
-        else:
-            self._stop()
+        self._stop()
 
     def __aiter__(self) -> "AsyncMessagesStreamWrapper[ResponseFormatT]":
         return self
@@ -414,7 +412,9 @@ class AsyncMessagesStreamManagerWrapper(Generic[ResponseFormatT]):
             )
         except Exception as exc:
             if stream_wrapper is not None:
-                await stream_wrapper.__aexit__(type(exc), exc, exc.__traceback__)
+                await stream_wrapper.__aexit__(
+                    type(exc), exc, exc.__traceback__
+                )
             else:
                 self._invocation.fail(exc)
             raise
