@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import logging
-from contextlib import AsyncExitStack, ExitStack, contextmanager
+from contextlib import contextmanager
 from types import TracebackType
 from typing import (
     TYPE_CHECKING,
@@ -159,7 +159,10 @@ class MessagesStreamWrapper(
     def close(self) -> None:
         try:
             self.stream.close()
-        finally:
+        except Exception as exc:
+            self._fail(exc)
+            raise
+        else:
             self._stop()
 
     def __iter__(self) -> "MessagesStreamWrapper[ResponseFormatT]":
@@ -277,7 +280,10 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
     async def close(self) -> None:  # type: ignore[override]
         try:
             await self.stream.close()
-        finally:
+        except Exception as exc:
+            self._fail(exc)
+            raise
+        else:
             self._stop()
 
     def __aiter__(self) -> "AsyncMessagesStreamWrapper[ResponseFormatT]":
@@ -338,21 +344,22 @@ class MessagesStreamManagerWrapper(Generic[ResponseFormatT]):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool | None:
-        suppressed = False
         stream_wrapper = self._stream_wrapper
         self._stream_wrapper = None
-        with ExitStack() as cleanup:
-            if stream_wrapper is not None:
-
-                def finalize_stream_wrapper() -> None:
-                    if suppressed:
-                        stream_wrapper.__exit__(None, None, None)
-                    else:
-                        stream_wrapper.__exit__(exc_type, exc_val, exc_tb)
-
-                cleanup.callback(finalize_stream_wrapper)
+        try:
             suppressed = self._manager.__exit__(exc_type, exc_val, exc_tb)
-            return suppressed
+        except Exception as exc:
+            if stream_wrapper is not None:
+                stream_wrapper.__exit__(type(exc), exc, exc.__traceback__)
+            else:
+                self._invocation.fail(exc)
+            raise
+        if stream_wrapper is not None:
+            if suppressed:
+                stream_wrapper.__exit__(None, None, None)
+            else:
+                stream_wrapper.__exit__(exc_type, exc_val, exc_tb)
+        return suppressed
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._manager, name)
@@ -399,25 +406,24 @@ class AsyncMessagesStreamManagerWrapper(Generic[ResponseFormatT]):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool | None:
-        suppressed = False
         stream_wrapper = self._stream_wrapper
         self._stream_wrapper = None
-        async with AsyncExitStack() as cleanup:
-            if stream_wrapper is not None:
-
-                async def finalize_stream_wrapper() -> None:
-                    if suppressed:
-                        await stream_wrapper.__aexit__(None, None, None)
-                    else:
-                        await stream_wrapper.__aexit__(
-                            exc_type, exc_val, exc_tb
-                        )
-
-                cleanup.push_async_callback(finalize_stream_wrapper)
+        try:
             suppressed = await self._manager.__aexit__(
                 exc_type, exc_val, exc_tb
             )
-            return suppressed
+        except Exception as exc:
+            if stream_wrapper is not None:
+                await stream_wrapper.__aexit__(type(exc), exc, exc.__traceback__)
+            else:
+                self._invocation.fail(exc)
+            raise
+        if stream_wrapper is not None:
+            if suppressed:
+                await stream_wrapper.__aexit__(None, None, None)
+            else:
+                await stream_wrapper.__aexit__(exc_type, exc_val, exc_tb)
+        return suppressed
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._manager, name)

@@ -50,9 +50,10 @@ def _make_async_stream_wrapper(stream):
 
 
 class _FakeSyncStream:
-    def __init__(self, *, events=None, error=None):
+    def __init__(self, *, events=None, error=None, close_error=None):
         self._events = list(events or [])
         self._error = error
+        self._close_error = close_error
         self.close_calls = 0
         self.response = _FakeSyncResponse()
 
@@ -68,12 +69,15 @@ class _FakeSyncStream:
 
     def close(self):
         self.close_calls += 1
+        if self._close_error is not None:
+            raise self._close_error
 
 
 class _FakeAsyncStream:
-    def __init__(self, *, events=None, error=None):
+    def __init__(self, *, events=None, error=None, close_error=None):
         self._events = list(events or [])
         self._error = error
+        self._close_error = close_error
         self.close_calls = 0
         self.final_message = SimpleNamespace(id="msg_final")
         self.response = _FakeAsyncResponse()
@@ -87,6 +91,8 @@ class _FakeAsyncStream:
 
     async def close(self):
         self.close_calls += 1
+        if self._close_error is not None:
+            raise self._close_error
 
     async def get_final_message(self):
         return self.final_message
@@ -206,6 +212,24 @@ def test_sync_stream_wrapper_exit_fails_and_closes_on_exception():
     assert stream.close_calls == 1
     assert stopped == [True]
     assert failures == [error]
+
+
+def test_sync_stream_wrapper_close_failure_fails_and_reraises():
+    error = RuntimeError("close failed")
+    stream = _FakeSyncStream(close_error=error)
+    wrapper = _make_stream_wrapper(stream)
+    stopped = []
+    failures = []
+
+    wrapper._stop = lambda: stopped.append(True)
+    wrapper._fail = failures.append
+
+    with pytest.raises(RuntimeError, match="close failed"):
+        wrapper.close()
+
+    assert stream.close_calls == 1
+    assert failures == [error]
+    assert stopped == []
 
 
 def test_sync_stream_wrapper_processes_events_and_stops_on_completion():
@@ -351,7 +375,8 @@ def test_sync_manager_exit_still_finalizes_stream_wrapper_when_manager_raises():
         wrapper.__exit__(ValueError, error, None)
 
     assert wrapper._manager.exit_args == (ValueError, error, None)
-    assert stream_wrapper.exit_args == (ValueError, error, None)
+    assert stream_wrapper.exit_args[:2] == (RuntimeError, manager_error)
+    assert stream_wrapper.exit_args[2] is not None
 
 
 @pytest.mark.asyncio
@@ -400,6 +425,25 @@ async def test_async_stream_wrapper_close_uses_close_and_stops():
 
     assert stream.close_calls == 1
     assert stopped == [True]
+
+
+@pytest.mark.asyncio
+async def test_async_stream_wrapper_close_failure_fails_and_reraises():
+    error = RuntimeError("close failed")
+    stream = _FakeAsyncStream(close_error=error)
+    wrapper = _make_async_stream_wrapper(stream)
+    stopped = []
+    failures = []
+
+    wrapper._stop = lambda: stopped.append(True)
+    wrapper._fail = failures.append
+
+    with pytest.raises(RuntimeError, match="close failed"):
+        await wrapper.close()
+
+    assert stream.close_calls == 1
+    assert failures == [error]
+    assert stopped == []
 
 
 @pytest.mark.asyncio
@@ -557,4 +601,5 @@ async def test_async_manager_exit_still_finalizes_stream_wrapper_when_manager_ra
         await wrapper.__aexit__(ValueError, error, None)
 
     assert wrapper._manager.exit_args == (ValueError, error, None)
-    assert stream_wrapper.exit_args == (ValueError, error, None)
+    assert stream_wrapper.exit_args[:2] == (RuntimeError, manager_error)
+    assert stream_wrapper.exit_args[2] is not None
