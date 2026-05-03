@@ -28,10 +28,6 @@ from typing import (
     cast,
 )
 
-from opentelemetry.util.genai.types import (
-    Error,
-)
-
 from .messages_extractors import set_invocation_response_attributes
 
 try:
@@ -58,6 +54,8 @@ if TYPE_CHECKING:
     )
     from anthropic.types.parsed_message import ParsedMessage
 
+    from opentelemetry.util.genai.invocation import InferenceInvocation
+
 
 _logger = logging.getLogger(__name__)
 ResponseT = TypeVar("ResponseT")
@@ -66,7 +64,7 @@ accumulate_event = cast("Callable[..., Message] | None", _sdk_accumulate_event)
 
 
 def _set_response_attributes(
-    invocation: Any,
+    invocation: "InferenceInvocation",
     result: "Message | None",
     capture_content: bool,
 ) -> None:
@@ -110,7 +108,7 @@ class MessageWrapper:
         self._message = message
         self._capture_content = capture_content
 
-    def extract_into(self, invocation: Any) -> None:
+    def extract_into(self, invocation: "InferenceInvocation") -> None:
         """Extract response data into the invocation."""
         set_invocation_response_attributes(
             invocation, self._message, self._capture_content
@@ -133,7 +131,7 @@ class MessagesStreamWrapper(
     def __init__(
         self,
         stream: "Stream[RawMessageStreamEvent] | MessageStream[ResponseFormatT]",
-        invocation: Any,
+        invocation: "InferenceInvocation",
         capture_content: bool,
     ):
         self.stream = stream
@@ -153,9 +151,7 @@ class MessagesStreamWrapper(
     ) -> bool:
         try:
             if exc_type is not None:
-                self._fail(
-                    str(exc_val), type(exc_val) if exc_val else Exception
-                )
+                self._fail(exc_val or Exception())
         finally:
             self.close()
         return False
@@ -178,7 +174,7 @@ class MessagesStreamWrapper(
             self._stop()
             raise
         except Exception as exc:
-            self._fail(str(exc), type(exc))
+            self._fail(exc)
             raise
         with self._safe_instrumentation("stream chunk processing"):
             self._process_chunk(chunk)
@@ -202,11 +198,11 @@ class MessagesStreamWrapper(
             self.invocation.stop()
         self._finalized = True
 
-    def _fail(self, message: str, error_type: type[BaseException]) -> None:
+    def _fail(self, exc: BaseException) -> None:
         if self._finalized:
             return
         with self._safe_instrumentation("invocation fail"):
-            self.invocation.fail(Error(message=message, type=error_type))
+            self.invocation.fail(exc)
         self._finalized = True
 
     @staticmethod
@@ -251,7 +247,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
     def __init__(
         self,
         stream: "AsyncStream[RawMessageStreamEvent] | AsyncMessageStream[ResponseFormatT]",
-        invocation: Any,
+        invocation: "InferenceInvocation",
         capture_content: bool,
     ):
         self.stream = stream
@@ -273,9 +269,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
     ) -> bool:
         try:
             if exc_type is not None:
-                self._fail(
-                    str(exc_val), type(exc_val) if exc_val else Exception
-                )
+                self._fail(exc_val or Exception())
         finally:
             await self.close()
         return False
@@ -302,7 +296,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
             self._stop()
             raise
         except Exception as exc:
-            self._fail(str(exc), type(exc))
+            self._fail(exc)
             raise
         with self._safe_instrumentation("stream chunk processing"):
             self._process_chunk(chunk)
@@ -315,7 +309,7 @@ class MessagesStreamManagerWrapper(Generic[ResponseFormatT]):
     def __init__(
         self,
         manager: "MessageStreamManager[ResponseFormatT]",
-        invocation: Any,
+        invocation: "InferenceInvocation",
         capture_content: bool,
     ):
         self._manager = manager
@@ -374,7 +368,7 @@ class AsyncMessagesStreamManagerWrapper(Generic[ResponseFormatT]):
     def __init__(
         self,
         manager: "AsyncMessageStreamManager[ResponseFormatT]",
-        invocation: Any,
+        invocation: "InferenceInvocation",
         capture_content: bool,
     ):
         self._manager = manager

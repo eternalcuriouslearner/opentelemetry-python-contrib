@@ -19,7 +19,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from anthropic.types import (
     InputJSONDelta,
@@ -160,12 +160,9 @@ def _convert_content_block_to_part(
             id=block.tool_use_id,
         )
 
-    # ContentBlockParam variants are TypedDicts (dicts at runtime);
-    # newer SDK versions may add Pydantic block types not handled above.
-    if isinstance(block, dict):
-        return _convert_dict_block_to_part(block)
-
-    return None
+    if not hasattr(block, "get"):
+        return None
+    return _convert_dict_block_to_part(cast("Mapping[str, Any]", block))
 
 
 def convert_content_to_parts(

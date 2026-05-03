@@ -192,9 +192,7 @@ def test_sync_stream_wrapper_exit_fails_and_closes_on_exception():
     failures = []
 
     wrapper._stop = lambda: stopped.append(True)
-    wrapper._fail = lambda message, error_type: failures.append(
-        (message, error_type)
-    )
+    wrapper._fail = failures.append
 
     error = ValueError("boom")
     result = wrapper.__exit__(ValueError, error, None)
@@ -202,7 +200,7 @@ def test_sync_stream_wrapper_exit_fails_and_closes_on_exception():
     assert result is False
     assert stream.close_calls == 1
     assert stopped == [True]
-    assert failures == [("boom", ValueError)]
+    assert failures == [error]
 
 
 def test_sync_stream_wrapper_processes_events_and_stops_on_completion():
@@ -232,14 +230,12 @@ def test_sync_stream_wrapper_fails_and_reraises_stream_errors():
     wrapper = _make_stream_wrapper(stream)
     failures = []
 
-    wrapper._fail = lambda message, error_type: failures.append(
-        (message, error_type)
-    )
+    wrapper._fail = failures.append
 
     with pytest.raises(ValueError, match="boom"):
         next(wrapper)
 
-    assert failures == [("boom", ValueError)]
+    assert failures == [error]
 
 
 def test_sync_stream_wrapper_getattr_passthrough():
@@ -376,9 +372,7 @@ async def test_async_stream_wrapper_exit_fails_and_closes_on_exception():
     failures = []
 
     wrapper._stop = lambda: stopped.append(True)
-    wrapper._fail = lambda message, error_type: failures.append(
-        (message, error_type)
-    )
+    wrapper._fail = failures.append
 
     error = ValueError("boom")
     result = await wrapper.__aexit__(ValueError, error, None)
@@ -386,7 +380,7 @@ async def test_async_stream_wrapper_exit_fails_and_closes_on_exception():
     assert result is False
     assert stream.close_calls == 1
     assert stopped == [True]
-    assert failures == [("boom", ValueError)]
+    assert failures == [error]
 
 
 @pytest.mark.asyncio
@@ -432,14 +426,12 @@ async def test_async_stream_wrapper_fails_and_reraises_stream_errors():
     wrapper = _make_async_stream_wrapper(stream)
     failures = []
 
-    wrapper._fail = lambda message, error_type: failures.append(
-        (message, error_type)
-    )
+    wrapper._fail = failures.append
 
     with pytest.raises(ValueError, match="boom"):
         await anext(wrapper)
 
-    assert failures == [("boom", ValueError)]
+    assert failures == [error]
 
 
 @pytest.mark.asyncio

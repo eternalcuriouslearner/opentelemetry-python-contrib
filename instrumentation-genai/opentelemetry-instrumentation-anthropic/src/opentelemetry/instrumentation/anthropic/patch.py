@@ -27,9 +27,6 @@ from opentelemetry.semconv._incubating.attributes import (
 )
 from opentelemetry.util.genai.handler import TelemetryHandler
 from opentelemetry.util.genai.invocation import InferenceInvocation
-from opentelemetry.util.genai.utils import (
-    should_capture_content_on_spans_in_experimental_mode,
-)
 
 from .messages_extractors import (
     extract_params,
@@ -113,7 +110,10 @@ def _create_invocation(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[InferenceInvocation, bool]:
-    capture_content = should_capture_content_on_spans_in_experimental_mode()
+    should_capture_content = cast(
+        "Callable[[], bool]", getattr(handler, "should_capture_content")
+    )
+    capture_content = should_capture_content()
     params = extract_params(*args, **kwargs)
     attributes = get_llm_request_attributes(params, instance)
     request_model_attribute = attributes.get(
@@ -145,7 +145,7 @@ def messages_stream(
     """Wrap the sync `stream` method of the `Messages` class."""
 
     def traced_method(
-        wrapped: Callable[..., "MessageStreamManager[Any]"],
+        wrapped: Callable[..., "MessageStreamManager"],
         instance: "Messages",
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
