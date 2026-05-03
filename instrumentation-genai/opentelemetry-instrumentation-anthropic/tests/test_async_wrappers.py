@@ -115,13 +115,18 @@ class _FakeSyncManager:
 
 
 class _FakeAsyncManager:
-    def __init__(self, stream, suppressed=False, exit_error=None):
+    def __init__(
+        self, stream, suppressed=False, enter_error=None, exit_error=None
+    ):
         self._stream = stream
         self._suppressed = suppressed
+        self._enter_error = enter_error
         self._exit_error = exit_error
         self.exit_args = None
 
     async def __aenter__(self):
+        if self._enter_error is not None:
+            raise self._enter_error
         return self._stream
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -472,6 +477,28 @@ async def test_async_manager_enter_constructs_async_stream_wrapper():
         assert isinstance(result, AsyncMessagesStreamWrapper)
         assert result.stream is stream
         assert wrapper._stream_wrapper is result
+
+
+@pytest.mark.asyncio
+async def test_async_manager_enter_fails_invocation_when_manager_raises():
+    error = RuntimeError("manager enter failure")
+    failures = []
+    invocation = _make_invocation()
+    invocation.fail = failures.append
+    wrapper = AsyncMessagesStreamManagerWrapper(
+        manager=_FakeAsyncManager(
+            stream=SimpleNamespace(),
+            enter_error=error,
+        ),
+        invocation=invocation,
+        capture_content=False,
+    )
+
+    with pytest.raises(RuntimeError, match="manager enter failure"):
+        async with wrapper:
+            pass
+
+    assert failures == [error]
 
 
 @pytest.mark.asyncio

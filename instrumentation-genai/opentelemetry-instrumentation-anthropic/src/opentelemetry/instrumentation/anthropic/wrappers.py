@@ -381,7 +381,11 @@ class AsyncMessagesStreamManagerWrapper(Generic[ResponseFormatT]):
     async def __aenter__(
         self,
     ) -> AsyncMessagesStreamWrapper[ResponseFormatT]:
-        msg_stream = await self._manager.__aenter__()
+        try:
+            msg_stream = await self._manager.__aenter__()
+        except Exception as exc:
+            self._invocation.fail(exc)
+            raise
         self._stream_wrapper = AsyncMessagesStreamWrapper(
             msg_stream,
             self._invocation,

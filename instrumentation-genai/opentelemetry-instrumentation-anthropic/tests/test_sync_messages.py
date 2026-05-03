@@ -640,6 +640,86 @@ def test_sync_messages_stream_api_error(
 
 
 @pytest.mark.vcr()
+def test_sync_messages_stream_interrupted_mid_iteration(
+    request,
+    span_exporter,
+    anthropic_client,
+    instrument_no_content,
+    monkeypatch,
+):
+    """Mid-stream network errors from Messages.stream propagate and record error."""
+    _skip_if_cassette_missing_and_no_real_key(request)
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    class ErrorInjectingStreamDelegate:
+        def __init__(self, inner):
+            self._inner = inner
+            self._count = 0
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self._count == 1:
+                raise ConnectionError("connection reset during stream")
+            self._count += 1
+            return next(self._inner)
+
+        def close(self):
+            return self._inner.close()
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    with pytest.raises(
+        ConnectionError, match="connection reset during stream"
+    ):
+        with anthropic_client.messages.stream(
+            model=model,
+            max_tokens=100,
+            messages=messages,
+        ) as stream:
+            monkeypatch.setattr(
+                stream,
+                "stream",
+                ErrorInjectingStreamDelegate(stream.stream),
+            )
+            for _ in stream:
+                pass
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MODEL] == model
+    assert span.attributes[ErrorAttributes.ERROR_TYPE] == "ConnectionError"
+
+
+@pytest.mark.vcr()
+def test_sync_messages_stream_closed_early_by_caller(
+    request, span_exporter, anthropic_client, instrument_no_content
+):
+    """Caller-closing Messages.stream early finalizes the span without error."""
+    _skip_if_cassette_missing_and_no_real_key(request)
+    model = "claude-sonnet-4-20250514"
+    messages = [{"role": "user", "content": "Say hello in one word."}]
+
+    with anthropic_client.messages.stream(
+        model=model,
+        max_tokens=100,
+        messages=messages,
+    ) as stream:
+        next(stream)
+        stream.close()
+
+    spans = span_exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MODEL] == model
+    assert ErrorAttributes.ERROR_TYPE not in span.attributes
+
+
+@pytest.mark.vcr()
 def test_sync_messages_create_streaming_iteration(
     span_exporter, anthropic_client, instrument_no_content
 ):
