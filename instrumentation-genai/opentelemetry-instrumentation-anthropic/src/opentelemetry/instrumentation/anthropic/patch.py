@@ -32,6 +32,7 @@ from .messages_extractors import (
     extract_params,
     get_input_messages,
     get_llm_request_attributes,
+    get_server_address_and_port,
     get_system_instruction,
 )
 from .wrappers import (
@@ -63,6 +64,7 @@ def messages_create(
     ],
 ]:
     """Wrap the `create` method of the `Messages` class to trace it."""
+    capture_content = handler.should_capture_content()
 
     def traced_method(
         wrapped: Callable[
@@ -80,8 +82,8 @@ def messages_create(
         "AnthropicStream[RawMessageStreamEvent]",
         MessagesStreamWrapper[None],
     ]:
-        invocation, capture_content = _create_invocation(
-            handler, instance, args, kwargs
+        invocation = _create_invocation(
+            handler, instance, args, kwargs, capture_content
         )
         try:
             result = wrapped(*args, **kwargs)
@@ -109,11 +111,8 @@ def _create_invocation(
     instance: "Messages",
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-) -> tuple[InferenceInvocation, bool]:
-    should_capture_content = cast(
-        "Callable[[], bool]", getattr(handler, "should_capture_content")
-    )
-    capture_content = should_capture_content()
+    capture_content: bool,
+) -> InferenceInvocation:
     params = extract_params(*args, **kwargs)
     attributes = get_llm_request_attributes(params, instance)
     request_model_attribute = attributes.get(
@@ -125,9 +124,12 @@ def _create_invocation(
         else params.model
     )
 
+    server_address, server_port = get_server_address_and_port(instance)
     invocation = handler.start_inference(
         provider=ANTHROPIC,
         request_model=request_model,
+        server_address=server_address,
+        server_port=server_port,
     )
     invocation.input_messages = (
         get_input_messages(params.messages) if capture_content else []
@@ -136,13 +138,14 @@ def _create_invocation(
         get_system_instruction(params.system) if capture_content else []
     )
     invocation.attributes = attributes
-    return invocation, capture_content
+    return invocation
 
 
 def messages_stream(
     handler: TelemetryHandler,
 ) -> Callable[..., MessagesStreamManagerWrapper[Any]]:
     """Wrap the sync `stream` method of the `Messages` class."""
+    capture_content = handler.should_capture_content()
 
     def traced_method(
         wrapped: Callable[..., "MessageStreamManager"],
@@ -150,8 +153,8 @@ def messages_stream(
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> MessagesStreamManagerWrapper[Any]:
-        invocation, capture_content = _create_invocation(
-            handler, instance, args, kwargs
+        invocation = _create_invocation(
+            handler, instance, args, kwargs, capture_content
         )
 
         try:

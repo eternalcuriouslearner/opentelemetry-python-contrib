@@ -220,18 +220,15 @@ def extract_params(  # pylint: disable=too-many-locals
     )
 
 
-def _set_server_address_and_port(
+def get_server_address_and_port(
     client_instance: "Messages",
-    attributes: dict[str, AttributeValue | None],
-) -> None:
+) -> tuple[str | None, int | None]:
     base_url = client_instance._client.base_url
-    host = base_url.host
-    if host:
-        attributes[ServerAttributes.SERVER_ADDRESS] = host
-
     port = base_url.port
-    if port and port != 443 and port > 0:
-        attributes[ServerAttributes.SERVER_PORT] = port
+    return (
+        base_url.host or None,
+        port if port and port != 443 and port > 0 else None,
+    )
 
 
 def get_llm_request_attributes(
@@ -247,5 +244,9 @@ def get_llm_request_attributes(
         GenAIAttributes.GEN_AI_REQUEST_TOP_K: params.top_k,
         GenAIAttributes.GEN_AI_REQUEST_STOP_SEQUENCES: params.stop_sequences,
     }
-    _set_server_address_and_port(client_instance, attributes)
+    address, port = get_server_address_and_port(client_instance)
+    if address is not None:
+        attributes[ServerAttributes.SERVER_ADDRESS] = address
+    if port is not None:
+        attributes[ServerAttributes.SERVER_PORT] = port
     return {k: v for k, v in attributes.items() if v is not None}
