@@ -64,8 +64,8 @@ accumulate_event = cast("Callable[..., Message] | None", _sdk_accumulate_event)
 
 
 def _set_response_attributes(
-    invocation: "InferenceInvocation",
-    result: "Message | None",
+    invocation: InferenceInvocation,
+    result: Message | None,
     capture_content: bool,
 ) -> None:
     set_invocation_response_attributes(invocation, result, capture_content)
@@ -108,7 +108,7 @@ class MessageWrapper:
         self._message = message
         self._capture_content = capture_content
 
-    def extract_into(self, invocation: "InferenceInvocation") -> None:
+    def extract_into(self, invocation: InferenceInvocation) -> None:
         """Extract response data into the invocation."""
         set_invocation_response_attributes(
             invocation, self._message, self._capture_content
@@ -130,17 +130,17 @@ class MessagesStreamWrapper(
 
     def __init__(
         self,
-        stream: "Stream[RawMessageStreamEvent] | MessageStream[ResponseFormatT]",
-        invocation: "InferenceInvocation",
+        stream: Stream[RawMessageStreamEvent] | MessageStream[ResponseFormatT],
+        invocation: InferenceInvocation,
         capture_content: bool,
     ):
         self.stream = stream
         self.invocation = invocation
-        self._message: "Message | ParsedMessage[ResponseFormatT] | None" = None
+        self._message: Message | ParsedMessage[ResponseFormatT] | None = None
         self._capture_content = capture_content
         self._finalized = False
 
-    def __enter__(self) -> "MessagesStreamWrapper[ResponseFormatT]":
+    def __enter__(self) -> MessagesStreamWrapper[ResponseFormatT]:
         return self
 
     def __exit__(
@@ -164,12 +164,12 @@ class MessagesStreamWrapper(
             raise
         self._stop()
 
-    def __iter__(self) -> "MessagesStreamWrapper[ResponseFormatT]":
+    def __iter__(self) -> MessagesStreamWrapper[ResponseFormatT]:
         return self
 
     def __next__(
         self,
-    ) -> "RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]":
+    ) -> RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]:
         try:
             chunk = next(self.stream)
         except StopIteration:
@@ -223,7 +223,7 @@ class MessagesStreamWrapper(
 
     def _process_chunk(
         self,
-        chunk: "RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]",
+        chunk: RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT],
     ) -> None:
         """Accumulate a final message snapshot from a streaming chunk."""
         snapshot = cast(
@@ -248,19 +248,19 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
 
     def __init__(
         self,
-        stream: "AsyncStream[RawMessageStreamEvent] | AsyncMessageStream[ResponseFormatT]",
-        invocation: "InferenceInvocation",
+        stream: AsyncStream[RawMessageStreamEvent] | AsyncMessageStream[ResponseFormatT],
+        invocation: InferenceInvocation,
         capture_content: bool,
     ):
         self.stream = stream
         self.invocation = invocation
-        self._message: "Message | ParsedMessage[ResponseFormatT] | None" = None
+        self._message: Message | ParsedMessage[ResponseFormatT] | None = None
         self._capture_content = capture_content
         self._finalized = False
 
     async def __aenter__(
         self,
-    ) -> "AsyncMessagesStreamWrapper[ResponseFormatT]":
+    ) -> AsyncMessagesStreamWrapper[ResponseFormatT]:
         return self
 
     async def __aexit__(
@@ -284,7 +284,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
             raise
         self._stop()
 
-    def __aiter__(self) -> "AsyncMessagesStreamWrapper[ResponseFormatT]":
+    def __aiter__(self) -> AsyncMessagesStreamWrapper[ResponseFormatT]:
         return self
 
     @property
@@ -293,7 +293,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
 
     async def __anext__(
         self,
-    ) -> "RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]":
+    ) -> RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT]:
         try:
             chunk = await self.stream.__anext__()
         except StopAsyncIteration:
@@ -312,8 +312,8 @@ class MessagesStreamManagerWrapper(Generic[ResponseFormatT]):
 
     def __init__(
         self,
-        manager: "MessageStreamManager[ResponseFormatT]",
-        invocation: "InferenceInvocation",
+        manager: MessageStreamManager[ResponseFormatT],
+        invocation: InferenceInvocation,
         capture_content: bool,
     ):
         self._manager = manager
@@ -372,8 +372,8 @@ class AsyncMessagesStreamManagerWrapper(Generic[ResponseFormatT]):
 
     def __init__(
         self,
-        manager: "AsyncMessageStreamManager[ResponseFormatT]",
-        invocation: "InferenceInvocation",
+        manager: AsyncMessageStreamManager[ResponseFormatT],
+        invocation: InferenceInvocation,
         capture_content: bool,
     ):
         self._manager = manager

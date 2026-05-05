@@ -58,8 +58,8 @@ def messages_create(
 ) -> Callable[
     ...,
     Union[
-        "AnthropicMessage",
-        "AnthropicStream[RawMessageStreamEvent]",
+        AnthropicMessage,
+        AnthropicStream[RawMessageStreamEvent],
         MessagesStreamWrapper[None],
     ],
 ]:
@@ -70,16 +70,16 @@ def messages_create(
         wrapped: Callable[
             ...,
             Union[
-                "AnthropicMessage",
-                "AnthropicStream[RawMessageStreamEvent]",
+                AnthropicMessage,
+                AnthropicStream[RawMessageStreamEvent],
             ],
         ],
-        instance: "Messages",
+        instance: Messages,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> Union[
-        "AnthropicMessage",
-        "AnthropicStream[RawMessageStreamEvent]",
+        AnthropicMessage,
+        AnthropicStream[RawMessageStreamEvent],
         MessagesStreamWrapper[None],
     ]:
         invocation = _create_invocation(
@@ -108,7 +108,7 @@ def messages_create(
 
 def _create_invocation(
     handler: TelemetryHandler,
-    instance: "Messages",
+    instance: Messages,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     capture_content: bool,
@@ -148,8 +148,8 @@ def messages_stream(
     capture_content = handler.should_capture_content()
 
     def traced_method(
-        wrapped: Callable[..., "MessageStreamManager"],
-        instance: "Messages",
+        wrapped: Callable[..., MessageStreamManager],
+        instance: Messages,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> MessagesStreamManagerWrapper[Any]:

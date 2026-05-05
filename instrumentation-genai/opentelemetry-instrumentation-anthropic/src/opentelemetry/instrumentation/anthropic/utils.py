@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -43,7 +44,7 @@ from opentelemetry.util.genai.types import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
 
     from anthropic.types import (
         ContentBlock,
@@ -162,7 +163,7 @@ def _convert_content_block_to_part(
 
     if not hasattr(block, "get"):
         return None
-    return _convert_dict_block_to_part(cast("Mapping[str, Any]", block))
+    return _convert_dict_block_to_part(cast(Mapping[str, Any], block))
 
 
 def convert_content_to_parts(
