@@ -223,7 +223,8 @@ class MessagesStreamWrapper(
 
     def _process_chunk(
         self,
-        chunk: RawMessageStreamEvent | ParsedMessageStreamEvent[ResponseFormatT],
+        chunk: RawMessageStreamEvent
+        | ParsedMessageStreamEvent[ResponseFormatT],
     ) -> None:
         """Accumulate a final message snapshot from a streaming chunk."""
         snapshot = cast(
@@ -248,7 +249,8 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
 
     def __init__(
         self,
-        stream: AsyncStream[RawMessageStreamEvent] | AsyncMessageStream[ResponseFormatT],
+        stream: AsyncStream[RawMessageStreamEvent]
+        | AsyncMessageStream[ResponseFormatT],
         invocation: InferenceInvocation,
         capture_content: bool,
     ):
