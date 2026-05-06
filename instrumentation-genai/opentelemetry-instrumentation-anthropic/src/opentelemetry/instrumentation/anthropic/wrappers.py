@@ -284,6 +284,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
         except Exception as exc:
             self._fail(exc)
             raise
+    finally:
         self._stop()
 
     def __aiter__(self) -> AsyncMessagesStreamWrapper[ResponseFormatT]:
