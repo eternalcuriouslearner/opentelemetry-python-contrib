@@ -150,8 +150,8 @@ class MessagesStreamWrapper(
         exc_tb: TracebackType | None,
     ) -> bool:
         try:
-            if exc_type is not None:
-                self._fail(exc_val or Exception())
+            if exc_val is not None:
+                self._fail(exc_val)
         finally:
             self.close()
         return False
@@ -272,8 +272,8 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
         exc_tb: TracebackType | None,
     ) -> bool:
         try:
-            if exc_type is not None:
-                self._fail(exc_val or Exception())
+            if exc_val is not None:
+                self._fail(exc_val)
         finally:
             await self.close()
         return False
