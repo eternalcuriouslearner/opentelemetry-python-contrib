@@ -14,14 +14,11 @@
 
 from __future__ import annotations
 
-import logging
-from contextlib import contextmanager
 from types import TracebackType
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Generator,
     Generic,
     Iterator,
     TypeVar,
@@ -57,7 +54,6 @@ if TYPE_CHECKING:
     from opentelemetry.util.genai.invocation import InferenceInvocation
 
 
-_logger = logging.getLogger(__name__)
 ResponseT = TypeVar("ResponseT")
 ResponseFormatT = TypeVar("ResponseFormatT")
 accumulate_event = cast("Callable[..., Message] | None", _sdk_accumulate_event)
@@ -178,8 +174,7 @@ class MessagesStreamWrapper(
         except Exception as exc:
             self._fail(exc)
             raise
-        with self._safe_instrumentation("stream chunk processing"):
-            self._process_chunk(chunk)
+        self._process_chunk(chunk)
         return chunk
 
     def __getattr__(self, name: str) -> object:
@@ -192,34 +187,17 @@ class MessagesStreamWrapper(
     def _stop(self) -> None:
         if self._finalized:
             return
-        with self._safe_instrumentation("response attribute extraction"):
-            _set_response_attributes(
-                self.invocation, self._message, self._capture_content
-            )
-        with self._safe_instrumentation("invocation stop"):
-            self.invocation.stop()
+        _set_response_attributes(
+            self.invocation, self._message, self._capture_content
+        )
+        self.invocation.stop()
         self._finalized = True
 
     def _fail(self, exc: BaseException) -> None:
         if self._finalized:
             return
-        with self._safe_instrumentation("invocation fail"):
-            self.invocation.fail(exc)
+        self.invocation.fail(exc)
         self._finalized = True
-
-    @staticmethod
-    @contextmanager
-    def _safe_instrumentation(
-        context: str,
-    ) -> Generator[None, None, None]:
-        try:
-            yield
-        except Exception:  # pylint: disable=broad-exception-caught
-            _logger.debug(
-                "Anthropic MessagesStreamWrapper instrumentation error in %s",
-                context,
-                exc_info=True,
-            )
 
     def _process_chunk(
         self,
@@ -304,8 +282,7 @@ class AsyncMessagesStreamWrapper(MessagesStreamWrapper[ResponseFormatT]):
         except Exception as exc:
             self._fail(exc)
             raise
-        with self._safe_instrumentation("stream chunk processing"):
-            self._process_chunk(chunk)
+        self._process_chunk(chunk)
         return chunk
 
 

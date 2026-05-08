@@ -29,9 +29,6 @@ from opentelemetry.instrumentation.anthropic.messages_extractors import (
     GEN_AI_USAGE_CACHE_CREATION_INPUT_TOKENS,
     GEN_AI_USAGE_CACHE_READ_INPUT_TOKENS,
 )
-from opentelemetry.instrumentation.anthropic.wrappers import (
-    MessagesStreamWrapper,
-)
 from opentelemetry.semconv._incubating.attributes import (
     error_attributes as ErrorAttributes,
 )
@@ -1128,38 +1125,6 @@ def test_sync_messages_stream_user_exception(
     span = spans[0]
     assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MODEL] == model
     assert span.attributes[ErrorAttributes.ERROR_TYPE] == "ValueError"
-
-
-@pytest.mark.vcr()
-def test_sync_messages_create_instrumentation_error_swallowed(
-    span_exporter, anthropic_client, instrument_no_content, monkeypatch
-):
-    """Instrumentation errors in _process_chunk must not propagate to user code."""
-    model = "claude-sonnet-4-20250514"
-    messages = [{"role": "user", "content": "Say hello in one word."}]
-
-    def exploding_process_chunk(self, chunk):
-        raise RuntimeError("instrumentation bug")
-
-    monkeypatch.setattr(
-        MessagesStreamWrapper, "_process_chunk", exploding_process_chunk
-    )
-
-    with anthropic_client.messages.create(
-        model=model,
-        max_tokens=100,
-        messages=messages,
-        stream=True,
-    ) as stream:
-        chunks = list(stream)
-
-    assert len(chunks) > 0
-
-    spans = span_exporter.get_finished_spans()
-    assert len(spans) == 1
-    span = spans[0]
-    assert span.attributes[GenAIAttributes.GEN_AI_REQUEST_MODEL] == model
-    assert ErrorAttributes.ERROR_TYPE not in span.attributes
 
 
 # =============================================================================
