@@ -58,6 +58,8 @@ def responses_create(handler: TelemetryHandler):
         except Exception as error:
             invocation.fail(Error(type=type(error), message=str(error)))
             raise
+          finally: 
+            invocation.stop()          
 
     return traced_method
 
