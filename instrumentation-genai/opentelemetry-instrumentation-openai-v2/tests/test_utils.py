@@ -183,6 +183,26 @@ def get_current_weather_tool_definition():
     }
 
 
+def get_responses_weather_tool_definition():
+    return {
+        "type": "function",
+        "name": "get_current_weather",
+        "description": "Get the current weather in a given location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The city and state, e.g. Boston, MA",
+                },
+            },
+            "required": ["location"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+
+
 EXPECTED_TOOL_DEFINITIONS = [
     {
         "type": "function",
