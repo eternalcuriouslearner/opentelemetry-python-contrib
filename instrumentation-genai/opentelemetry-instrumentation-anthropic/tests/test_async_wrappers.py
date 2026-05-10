@@ -300,7 +300,7 @@ def test_sync_manager_does_not_create_invocation_until_enter():
         capture_content=False,
     )
 
-    assert factory_calls == []
+    assert not factory_calls
 
     with wrapper:
         pass
