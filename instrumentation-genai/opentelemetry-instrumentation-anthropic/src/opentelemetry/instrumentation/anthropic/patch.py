@@ -153,17 +153,13 @@ def messages_stream(
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> MessagesStreamManagerWrapper[Any]:
-        invocation = _create_invocation(
-            handler, instance, args, kwargs, capture_content
+        return MessagesStreamManagerWrapper(
+            wrapped(*args, **kwargs),
+            lambda: _create_invocation(
+                handler, instance, args, kwargs, capture_content
+            ),
+            capture_content,
         )
-
-        try:
-            return MessagesStreamManagerWrapper(
-                wrapped(*args, **kwargs), invocation, capture_content
-            )
-        except Exception as exc:
-            invocation.fail(exc)
-            raise
 
     return cast(
         "Callable[..., MessagesStreamManagerWrapper[Any]]", traced_method

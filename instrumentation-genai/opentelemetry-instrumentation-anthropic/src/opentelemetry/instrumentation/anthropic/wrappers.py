@@ -292,25 +292,28 @@ class MessagesStreamManagerWrapper(Generic[ResponseFormatT]):
     def __init__(
         self,
         manager: MessageStreamManager[ResponseFormatT],
-        invocation: InferenceInvocation,
+        invocation_factory: Callable[[], InferenceInvocation],
         capture_content: bool,
     ):
         self._manager = manager
-        self._invocation = invocation
+        self._invocation_factory = invocation_factory
+        self._invocation: InferenceInvocation | None = None
         self._capture_content = capture_content
         self._stream_wrapper: MessagesStreamWrapper[ResponseFormatT] | None = (
             None
         )
 
     def __enter__(self) -> MessagesStreamWrapper[ResponseFormatT]:
+        invocation = self._invocation_factory()
+        self._invocation = invocation
         try:
             stream = self._manager.__enter__()
         except Exception as exc:
-            self._invocation.fail(exc)
+            invocation.fail(exc)
             raise
         self._stream_wrapper = MessagesStreamWrapper(
             stream,
-            self._invocation,
+            invocation,
             self._capture_content,
         )
         return self._stream_wrapper
@@ -328,7 +331,7 @@ class MessagesStreamManagerWrapper(Generic[ResponseFormatT]):
         except Exception as exc:
             if stream_wrapper is not None:
                 stream_wrapper.__exit__(type(exc), exc, exc.__traceback__)
-            else:
+            elif self._invocation is not None:
                 self._invocation.fail(exc)
             raise
         if stream_wrapper is not None:
@@ -348,6 +351,10 @@ class AsyncMessagesStreamManagerWrapper(Generic[ResponseFormatT]):
     Wraps AsyncMessageStreamManager from the Anthropic SDK:
     https://github.com/anthropics/anthropic-sdk-python/blob/05220bc1c1079fe01f5c4babc007ec7a990859d9/src/anthropic/lib/streaming/_messages.py#L294
     """
+
+    # When async Messages.stream() instrumentation is wired up, start the
+    # invocation lazily in __aenter__ to avoid opening spans for unentered
+    # managers.
 
     def __init__(
         self,

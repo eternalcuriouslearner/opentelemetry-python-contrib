@@ -291,7 +291,7 @@ def test_sync_manager_enter_constructs_stream_wrapper():
     stream = _FakeSyncStream()
     wrapper = MessagesStreamManagerWrapper(
         manager=_FakeSyncManager(stream=stream),
-        invocation=_make_invocation(),
+        invocation_factory=_make_invocation,
         capture_content=False,
     )
 
@@ -299,6 +299,24 @@ def test_sync_manager_enter_constructs_stream_wrapper():
         assert isinstance(result, MessagesStreamWrapper)
         assert result.stream is stream
         assert wrapper._stream_wrapper is result
+
+
+def test_sync_manager_does_not_create_invocation_until_enter():
+    stream = _FakeSyncStream()
+    factory_calls = []
+    wrapper = MessagesStreamManagerWrapper(
+        manager=_FakeSyncManager(stream=stream),
+        invocation_factory=lambda: factory_calls.append(True)
+        or _make_invocation(),
+        capture_content=False,
+    )
+
+    assert factory_calls == []
+
+    with wrapper:
+        pass
+
+    assert factory_calls == [True]
 
 
 def test_sync_manager_enter_fails_invocation_when_manager_raises():
@@ -311,7 +329,7 @@ def test_sync_manager_enter_fails_invocation_when_manager_raises():
             stream=SimpleNamespace(),
             enter_error=error,
         ),
-        invocation=invocation,
+        invocation_factory=lambda: invocation,
         capture_content=False,
     )
 
@@ -325,7 +343,7 @@ def test_sync_manager_enter_fails_invocation_when_manager_raises():
 def test_sync_manager_exit_forwards_exception_to_stream_wrapper():
     wrapper = MessagesStreamManagerWrapper(
         manager=_FakeSyncManager(stream=SimpleNamespace(), suppressed=False),
-        invocation=_make_invocation(),
+        invocation_factory=_make_invocation,
         capture_content=False,
     )
     stream_wrapper = _FakeStreamWrapper()
@@ -342,7 +360,7 @@ def test_sync_manager_exit_forwards_exception_to_stream_wrapper():
 def test_sync_manager_exit_uses_none_exception_when_manager_suppresses():
     wrapper = MessagesStreamManagerWrapper(
         manager=_FakeSyncManager(stream=SimpleNamespace(), suppressed=True),
-        invocation=_make_invocation(),
+        invocation_factory=_make_invocation,
         capture_content=False,
     )
     stream_wrapper = _FakeStreamWrapper()
@@ -364,7 +382,7 @@ def test_sync_manager_exit_still_finalizes_stream_wrapper_when_manager_raises():
             suppressed=False,
             exit_error=manager_error,
         ),
-        invocation=_make_invocation(),
+        invocation_factory=_make_invocation,
         capture_content=False,
     )
     stream_wrapper = _FakeStreamWrapper()
