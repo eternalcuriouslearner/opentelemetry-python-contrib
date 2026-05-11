@@ -60,6 +60,9 @@ class _FakeSyncStream:
         if self._close_error:
             raise self._close_error
 
+    def __len__(self):
+        return 42
+
 
 class _FakeSyncIterable:
     def __init__(self, chunks=None):
@@ -76,18 +79,18 @@ class _FakeSyncIterable:
 class _TestSyncStreamWrapper(SyncStreamWrapper):
     def __init__(self, stream):
         super().__init__(stream)
-        self.processed = []
-        self.stop_count = 0
-        self.failures = []
+        self._self_processed = []
+        self._self_stop_count = 0
+        self._self_failures = []
 
     def _process_chunk(self, chunk):
-        self.processed.append(chunk)
+        self._self_processed.append(chunk)
 
     def _stop_stream(self):
-        self.stop_count += 1
+        self._self_stop_count += 1
 
     def _fail_stream(self, error):
-        self.failures.append(error)
+        self._self_failures.append(error)
 
 
 class _FailingSyncProcessStreamWrapper(_TestSyncStreamWrapper):
@@ -97,13 +100,13 @@ class _FailingSyncProcessStreamWrapper(_TestSyncStreamWrapper):
 
 class _FailingSyncStopStreamWrapper(_TestSyncStreamWrapper):
     def _stop_stream(self):
-        self.stop_count += 1
+        self._self_stop_count += 1
         raise ValueError("instrumentation failed")
 
 
 class _FailingSyncFailStreamWrapper(_TestSyncStreamWrapper):
     def _fail_stream(self, error):
-        self.failures.append(error)
+        self._self_failures.append(error)
         raise ValueError("instrumentation failed")
 
 
@@ -112,14 +115,14 @@ def test_sync_stream_wrapper_processes_chunks_and_stops():
     wrapper = _TestSyncStreamWrapper(stream)
 
     assert next(wrapper) == "chunk"
-    assert wrapper.processed == ["chunk"]
+    assert wrapper._self_processed == ["chunk"]
 
     try:
         next(wrapper)
     except StopIteration:
         pass
 
-    assert wrapper.stop_count == 1
+    assert wrapper._self_stop_count == 1
 
 
 def test_sync_stream_wrapper_processes_iterables():
@@ -127,12 +130,12 @@ def test_sync_stream_wrapper_processes_iterables():
     wrapper = _TestSyncStreamWrapper(stream)
 
     assert next(wrapper) == "chunk"
-    assert wrapper.processed == ["chunk"]
+    assert wrapper._self_processed == ["chunk"]
 
     with pytest.raises(StopIteration):
         next(wrapper)
 
-    assert wrapper.stop_count == 1
+    assert wrapper._self_stop_count == 1
 
 
 def test_sync_stream_wrapper_fails_stream_errors():
@@ -144,7 +147,7 @@ def test_sync_stream_wrapper_fails_stream_errors():
     except ValueError:
         pass
 
-    assert wrapper.failures == [error]
+    assert wrapper._self_failures == [error]
 
 
 def test_sync_stream_wrapper_close_stops_once():
@@ -155,8 +158,8 @@ def test_sync_stream_wrapper_close_stops_once():
     wrapper.close()
 
     assert stream.close_count == 2
-    assert wrapper.stop_count == 1
-    assert not wrapper.failures
+    assert wrapper._self_stop_count == 1
+    assert not wrapper._self_failures
 
 
 def test_sync_stream_wrapper_close_fails_with_close_error():
@@ -168,8 +171,8 @@ def test_sync_stream_wrapper_close_fails_with_close_error():
     with pytest.raises(RuntimeError, match="close failure"):
         wrapper.close()
 
-    assert wrapper.failures == [error]
-    assert wrapper.stop_count == 0
+    assert wrapper._self_failures == [error]
+    assert wrapper._self_stop_count == 0
 
 
 def test_sync_stream_wrapper_exit_closes_and_propagates_user_errors():
@@ -180,8 +183,8 @@ def test_sync_stream_wrapper_exit_closes_and_propagates_user_errors():
     assert wrapper.__exit__(RuntimeError, error, None) is False
 
     assert stream.close_count == 1
-    assert wrapper.stop_count == 0
-    assert wrapper.failures == [error]
+    assert wrapper._self_stop_count == 0
+    assert wrapper._self_failures == [error]
 
 
 def test_sync_stream_wrapper_exit_keeps_user_error_when_close_fails():
@@ -193,8 +196,8 @@ def test_sync_stream_wrapper_exit_keeps_user_error_when_close_fails():
     assert wrapper.__exit__(RuntimeError, error, None) is False
 
     assert stream.close_count == 1
-    assert wrapper.failures == [error]
-    assert wrapper.stop_count == 0
+    assert wrapper._self_failures == [error]
+    assert wrapper._self_stop_count == 0
 
 
 def test_sync_stream_wrapper_swallows_finalize_errors():
@@ -203,7 +206,7 @@ def test_sync_stream_wrapper_swallows_finalize_errors():
     wrapper.close()
     wrapper.close()
 
-    assert wrapper.stop_count == 1
+    assert wrapper._self_stop_count == 1
 
 
 def test_sync_stream_wrapper_swallows_failure_finalize_errors():
@@ -216,7 +219,7 @@ def test_sync_stream_wrapper_swallows_failure_finalize_errors():
     stream._close_error = None
     wrapper.close()
 
-    assert wrapper.failures == [close_error]
+    assert wrapper._self_failures == [close_error]
 
 
 def test_sync_stream_wrapper_swallows_stop_iteration_finalize_errors():
@@ -240,6 +243,19 @@ def test_sync_stream_wrapper_getattr_passthrough():
     assert wrapper.extra_attribute == "passthrough"
 
 
+def test_sync_stream_wrapper_exposes_wrapped_stream():
+    stream = _FakeSyncStream()
+    wrapper = _TestSyncStreamWrapper(stream)
+
+    assert wrapper.__wrapped__ is stream
+
+
+def test_sync_stream_wrapper_magic_method_passthrough():
+    wrapper = _TestSyncStreamWrapper(_FakeSyncStream())
+
+    assert len(wrapper) == 42
+
+
 def test_sync_stream_wrapper_stop_iteration_does_not_double_finalize():
     wrapper = _TestSyncStreamWrapper(_FakeSyncStream())
 
@@ -247,8 +263,8 @@ def test_sync_stream_wrapper_stop_iteration_does_not_double_finalize():
         next(wrapper)
     wrapper.close()
 
-    assert wrapper.stop_count == 1
-    assert not wrapper.failures
+    assert wrapper._self_stop_count == 1
+    assert not wrapper._self_failures
 
 
 def test_sync_stream_wrapper_swallows_process_chunk_errors():
@@ -257,7 +273,7 @@ def test_sync_stream_wrapper_swallows_process_chunk_errors():
     )
 
     assert next(wrapper) == "chunk"
-    assert not wrapper.failures
+    assert not wrapper._self_failures
 
 
 class _FakeAsyncStream:
@@ -283,6 +299,9 @@ class _FakeAsyncStream:
         if self._close_error:
             raise self._close_error
 
+    def __len__(self):
+        return 42
+
 
 class _FakeAsyncIterable:
     def __init__(self, chunks=None):
@@ -299,18 +318,18 @@ class _FakeAsyncIterable:
 class _TestAsyncStreamWrapper(AsyncStreamWrapper):
     def __init__(self, stream):
         super().__init__(stream)
-        self.processed = []
-        self.stop_count = 0
-        self.failures = []
+        self._self_processed = []
+        self._self_stop_count = 0
+        self._self_failures = []
 
     def _process_chunk(self, chunk):
-        self.processed.append(chunk)
+        self._self_processed.append(chunk)
 
     def _stop_stream(self):
-        self.stop_count += 1
+        self._self_stop_count += 1
 
     def _fail_stream(self, error):
-        self.failures.append(error)
+        self._self_failures.append(error)
 
 
 class _FailingAsyncProcessStreamWrapper(_TestAsyncStreamWrapper):
@@ -320,13 +339,13 @@ class _FailingAsyncProcessStreamWrapper(_TestAsyncStreamWrapper):
 
 class _FailingAsyncStopStreamWrapper(_TestAsyncStreamWrapper):
     def _stop_stream(self):
-        self.stop_count += 1
+        self._self_stop_count += 1
         raise ValueError("instrumentation failed")
 
 
 class _FailingAsyncFailStreamWrapper(_TestAsyncStreamWrapper):
     def _fail_stream(self, error):
-        self.failures.append(error)
+        self._self_failures.append(error)
         raise ValueError("instrumentation failed")
 
 
@@ -335,14 +354,14 @@ def test_async_stream_wrapper_processes_chunks_and_stops():
         wrapper = _TestAsyncStreamWrapper(_FakeAsyncStream(chunks=["chunk"]))
 
         assert await anext(wrapper) == "chunk"
-        assert wrapper.processed == ["chunk"]
+        assert wrapper._self_processed == ["chunk"]
 
         try:
             await anext(wrapper)
         except StopAsyncIteration:
             pass
 
-        assert wrapper.stop_count == 1
+        assert wrapper._self_stop_count == 1
 
     asyncio.run(exercise())
 
@@ -353,12 +372,12 @@ def test_async_stream_wrapper_processes_async_iterables():
         wrapper = _TestAsyncStreamWrapper(stream)
 
         assert await anext(wrapper) == "chunk"
-        assert wrapper.processed == ["chunk"]
+        assert wrapper._self_processed == ["chunk"]
 
         with pytest.raises(StopAsyncIteration):
             await anext(wrapper)
 
-        assert wrapper.stop_count == 1
+        assert wrapper._self_stop_count == 1
 
     asyncio.run(exercise())
 
@@ -371,7 +390,7 @@ def test_async_stream_wrapper_fails_stream_errors():
         with pytest.raises(ValueError):
             await anext(wrapper)
 
-        assert wrapper.failures == [error]
+        assert wrapper._self_failures == [error]
 
     asyncio.run(exercise())
 
@@ -385,8 +404,8 @@ def test_async_stream_wrapper_close_stops_once():
         await wrapper.close()
 
         assert stream.close_count == 2
-        assert wrapper.stop_count == 1
-        assert not wrapper.failures
+        assert wrapper._self_stop_count == 1
+        assert not wrapper._self_failures
 
     asyncio.run(exercise())
 
@@ -401,8 +420,8 @@ def test_async_stream_wrapper_close_fails_with_close_error():
         with pytest.raises(RuntimeError, match="close failure"):
             await wrapper.close()
 
-        assert wrapper.failures == [error]
-        assert wrapper.stop_count == 0
+        assert wrapper._self_failures == [error]
+        assert wrapper._self_stop_count == 0
 
     asyncio.run(exercise())
 
@@ -416,8 +435,8 @@ def test_async_stream_wrapper_exit_closes_and_propagates_user_errors():
         assert await wrapper.__aexit__(RuntimeError, error, None) is False
 
         assert stream.close_count == 1
-        assert wrapper.stop_count == 0
-        assert wrapper.failures == [error]
+        assert wrapper._self_stop_count == 0
+        assert wrapper._self_failures == [error]
 
     asyncio.run(exercise())
 
@@ -432,8 +451,8 @@ def test_async_stream_wrapper_exit_keeps_user_error_when_close_fails():
         assert await wrapper.__aexit__(RuntimeError, error, None) is False
 
         assert stream.close_count == 1
-        assert wrapper.failures == [error]
-        assert wrapper.stop_count == 0
+        assert wrapper._self_failures == [error]
+        assert wrapper._self_stop_count == 0
 
     asyncio.run(exercise())
 
@@ -445,7 +464,7 @@ def test_async_stream_wrapper_swallows_finalize_errors():
         await wrapper.close()
         await wrapper.close()
 
-        assert wrapper.stop_count == 1
+        assert wrapper._self_stop_count == 1
 
     asyncio.run(exercise())
 
@@ -461,7 +480,7 @@ def test_async_stream_wrapper_swallows_failure_finalize_errors():
         stream._close_error = None
         await wrapper.close()
 
-        assert wrapper.failures == [close_error]
+        assert wrapper._self_failures == [close_error]
 
     asyncio.run(exercise())
 
@@ -493,6 +512,19 @@ def test_async_stream_wrapper_getattr_passthrough():
     assert wrapper.extra_attribute == "passthrough"
 
 
+def test_async_stream_wrapper_exposes_wrapped_stream():
+    stream = _FakeAsyncStream()
+    wrapper = _TestAsyncStreamWrapper(stream)
+
+    assert wrapper.__wrapped__ is stream
+
+
+def test_async_stream_wrapper_magic_method_passthrough():
+    wrapper = _TestAsyncStreamWrapper(_FakeAsyncStream())
+
+    assert len(wrapper) == 42
+
+
 def test_async_stream_wrapper_stop_iteration_does_not_double_finalize():
     async def exercise():
         wrapper = _TestAsyncStreamWrapper(_FakeAsyncStream())
@@ -501,8 +533,8 @@ def test_async_stream_wrapper_stop_iteration_does_not_double_finalize():
             await anext(wrapper)
         await wrapper.close()
 
-        assert wrapper.stop_count == 1
-        assert not wrapper.failures
+        assert wrapper._self_stop_count == 1
+        assert not wrapper._self_failures
 
     asyncio.run(exercise())
 
@@ -514,6 +546,6 @@ def test_async_stream_wrapper_swallows_process_chunk_errors():
         )
 
         assert await anext(wrapper) == "chunk"
-        assert not wrapper.failures
+        assert not wrapper._self_failures
 
     asyncio.run(exercise())

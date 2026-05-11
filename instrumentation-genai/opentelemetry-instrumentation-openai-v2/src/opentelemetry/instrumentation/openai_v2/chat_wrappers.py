@@ -39,35 +39,35 @@ from .chat_buffers import ChoiceBuffer
 class _ChatStreamMixin:
     """Chat-specific hooks shared by sync and async stream wrappers."""
 
-    invocation: InferenceInvocation
-    capture_content: bool
-    choice_buffers: list
-    response_id: Optional[str] = None
-    response_model: Optional[str] = None
-    service_tier: Optional[str] = None
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
+    _self_invocation: InferenceInvocation
+    _self_capture_content: bool
+    _self_choice_buffers: list
+    _self_response_id: Optional[str]
+    _self_response_model: Optional[str]
+    _self_service_tier: Optional[str]
+    _self_prompt_tokens: Optional[int]
+    _self_completion_tokens: Optional[int]
 
     def _set_response_model(self, chunk):
-        if self.response_model:
+        if self._self_response_model:
             return
 
         if getattr(chunk, "model", None):
-            self.response_model = chunk.model
+            self._self_response_model = chunk.model
 
     def _set_response_id(self, chunk):
-        if self.response_id:
+        if self._self_response_id:
             return
 
         if getattr(chunk, "id", None):
-            self.response_id = chunk.id
+            self._self_response_id = chunk.id
 
     def _set_response_service_tier(self, chunk):
-        if self.service_tier:
+        if self._self_service_tier:
             return
 
         if getattr(chunk, "service_tier", None):
-            self.service_tier = chunk.service_tier
+            self._self_service_tier = chunk.service_tier
 
     def _build_streaming_response(self, chunk):
         if getattr(chunk, "choices", None) is None:
@@ -78,29 +78,29 @@ class _ChatStreamMixin:
             if not choice.delta:
                 continue
 
-            for idx in range(len(self.choice_buffers), choice.index + 1):
-                self.choice_buffers.append(ChoiceBuffer(idx))
+            for idx in range(len(self._self_choice_buffers), choice.index + 1):
+                self._self_choice_buffers.append(ChoiceBuffer(idx))
 
             if choice.finish_reason:
-                self.choice_buffers[
+                self._self_choice_buffers[
                     choice.index
                 ].finish_reason = choice.finish_reason
 
             if choice.delta.content is not None:
-                self.choice_buffers[choice.index].append_text_content(
+                self._self_choice_buffers[choice.index].append_text_content(
                     choice.delta.content
                 )
 
             if choice.delta.tool_calls is not None:
                 for tool_call in choice.delta.tool_calls:
-                    self.choice_buffers[choice.index].append_tool_call(
+                    self._self_choice_buffers[choice.index].append_tool_call(
                         tool_call
                     )
 
     def _set_usage(self, chunk):
         if getattr(chunk, "usage", None):
-            self.completion_tokens = chunk.usage.completion_tokens
-            self.prompt_tokens = chunk.usage.prompt_tokens
+            self._self_completion_tokens = chunk.usage.completion_tokens
+            self._self_prompt_tokens = chunk.usage.prompt_tokens
 
     def _process_chunk(self, chunk):
         self._set_response_id(chunk)
@@ -110,10 +110,10 @@ class _ChatStreamMixin:
         self._set_usage(chunk)
 
     def _set_output_messages(self):
-        if not self.capture_content:  # optimization
+        if not self._self_capture_content:  # optimization
             return
         output_messages = []
-        for choice in self.choice_buffers:
+        for choice in self._self_choice_buffers:
             message = OutputMessage(
                 role="assistant",
                 finish_reason=choice.finish_reason or "error",
@@ -142,7 +142,7 @@ class _ChatStreamMixin:
                 message.parts.extend(tool_calls)
             output_messages.append(message)
 
-        self.invocation.output_messages = output_messages
+        self._self_invocation.output_messages = output_messages
 
     def _stop_stream(self) -> None:
         self._cleanup()
@@ -155,30 +155,30 @@ class _ChatStreamMixin:
         return self
 
     def _cleanup(self, error: Optional[BaseException] = None) -> None:
-        self.invocation.response_model_name = self.response_model
-        self.invocation.response_id = self.response_id
-        self.invocation.input_tokens = self.prompt_tokens
-        self.invocation.output_tokens = self.completion_tokens
+        self._self_invocation.response_model_name = self._self_response_model
+        self._self_invocation.response_id = self._self_response_id
+        self._self_invocation.input_tokens = self._self_prompt_tokens
+        self._self_invocation.output_tokens = self._self_completion_tokens
         finish_reasons = [
             choice.finish_reason
-            for choice in self.choice_buffers
+            for choice in self._self_choice_buffers
             if choice.finish_reason
         ]
         if finish_reasons:
-            self.invocation.finish_reasons = finish_reasons
-        if self.service_tier:
-            self.invocation.attributes.update(
+            self._self_invocation.finish_reasons = finish_reasons
+        if self._self_service_tier:
+            self._self_invocation.attributes.update(
                 {
-                    OpenAIAttributes.OPENAI_RESPONSE_SERVICE_TIER: self.service_tier
+                    OpenAIAttributes.OPENAI_RESPONSE_SERVICE_TIER: self._self_service_tier
                 },
             )
 
         self._set_output_messages()
 
         if error:
-            self.invocation.fail(error)
+            self._self_invocation.fail(error)
         else:
-            self.invocation.stop()
+            self._self_invocation.stop()
 
 
 class ChatStreamWrapper(
@@ -192,9 +192,14 @@ class ChatStreamWrapper(
         capture_content: bool,
     ):
         super().__init__(stream)
-        self.invocation = invocation
-        self.choice_buffers = []
-        self.capture_content = capture_content
+        self._self_invocation = invocation
+        self._self_choice_buffers = []
+        self._self_capture_content = capture_content
+        self._self_response_id = None
+        self._self_response_model = None
+        self._self_service_tier = None
+        self._self_prompt_tokens = None
+        self._self_completion_tokens = None
 
 
 class AsyncChatStreamWrapper(
@@ -208,9 +213,14 @@ class AsyncChatStreamWrapper(
         capture_content: bool,
     ):
         super().__init__(stream)
-        self.invocation = invocation
-        self.choice_buffers = []
-        self.capture_content = capture_content
+        self._self_invocation = invocation
+        self._self_choice_buffers = []
+        self._self_capture_content = capture_content
+        self._self_response_id = None
+        self._self_response_model = None
+        self._self_service_tier = None
+        self._self_prompt_tokens = None
+        self._self_completion_tokens = None
 
 
 __all__ = [

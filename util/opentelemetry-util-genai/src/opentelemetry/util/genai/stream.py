@@ -17,13 +17,43 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Any, Generic, Literal, TypeVar
+from typing import (
+    AsyncIterable,
+    Generic,
+    Iterable,
+    Literal,
+    Protocol,
+    TYPE_CHECKING,
+    TypeVar,
+)
+
+if TYPE_CHECKING:
+
+    class _ObjectProxy:
+        def __init__(self, wrapped: object) -> None: ...
+
+else:
+    from wrapt import ObjectProxy as _ObjectProxy
+
 
 ChunkT = TypeVar("ChunkT")
+_ChunkT_co = TypeVar("_ChunkT_co", covariant=True)
 _logger = logging.getLogger(__name__)
 
 
-class SyncStreamWrapper(ABC, Generic[ChunkT]):
+class _SyncStream(Iterable[_ChunkT_co], Protocol[_ChunkT_co]):
+    """Structural type for streams accepted by ``SyncStreamWrapper``."""
+
+    def close(self) -> None: ...
+
+
+class _AsyncStream(AsyncIterable[_ChunkT_co], Protocol[_ChunkT_co]):
+    """Structural type for streams accepted by ``AsyncStreamWrapper``."""
+
+    async def close(self) -> None: ...
+
+
+class SyncStreamWrapper(_ObjectProxy, ABC, Generic[ChunkT]):
     """Base class for synchronous instrumented stream wrappers.
 
     Subclass this when wrapping a provider SDK stream that is consumed with
@@ -37,10 +67,11 @@ class SyncStreamWrapper(ABC, Generic[ChunkT]):
     internally by the wrapper lifecycle and are not part of the public API.
     """
 
-    def __init__(self, stream: Any):
-        self.stream = stream
-        self._iterator = iter(stream)
-        self._finalized = False
+    def __init__(self, stream: _SyncStream[ChunkT]):
+        super().__init__(stream)
+        self._self_stream = stream
+        self._self_iterator = iter(stream)
+        self._self_finalized = False
 
     def __enter__(self):
         return self
@@ -51,10 +82,10 @@ class SyncStreamWrapper(ABC, Generic[ChunkT]):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
-        if exc_type is not None:
-            self._safe_finalize_failure(exc_val or Exception())
+        if exc_val is not None:
+            self._safe_finalize_failure(exc_val)
             try:
-                self.stream.close()
+                self._self_stream.close()
             except Exception:  # pylint: disable=broad-exception-caught
                 _logger.debug(
                     "GenAI stream close error after user exception",
@@ -67,18 +98,21 @@ class SyncStreamWrapper(ABC, Generic[ChunkT]):
 
     def close(self) -> None:
         try:
-            self.stream.close()
+            self._self_stream.close()
         except Exception as error:
             self._safe_finalize_failure(error)
             raise
         self._safe_finalize_success()
 
     def __iter__(self):
+        # Override ``ObjectProxy.__iter__`` so iteration drives ``__next__``
+        # below and runs ``_process_chunk`` per chunk; otherwise iteration
+        # would be forwarded to the wrapped stream and bypass instrumentation.
         return self
 
     def __next__(self) -> ChunkT:
         try:
-            chunk = next(self._iterator)
+            chunk = next(self._self_iterator)
         except StopIteration:
             self._safe_finalize_success()
             raise
@@ -91,19 +125,16 @@ class SyncStreamWrapper(ABC, Generic[ChunkT]):
             self._handle_process_chunk_error(error)
         return chunk
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.stream, name)
-
     def _finalize_success(self) -> None:
-        if self._finalized:
+        if self._self_finalized:
             return
-        self._finalized = True
+        self._self_finalized = True
         self._stop_stream()
 
     def _finalize_failure(self, error: BaseException) -> None:
-        if self._finalized:
+        if self._self_finalized:
             return
-        self._finalized = True
+        self._self_finalized = True
         self._fail_stream(error)
 
     def _safe_finalize_success(self) -> None:
@@ -144,7 +175,7 @@ class SyncStreamWrapper(ABC, Generic[ChunkT]):
         )
 
 
-class AsyncStreamWrapper(ABC, Generic[ChunkT]):
+class AsyncStreamWrapper(_ObjectProxy, ABC, Generic[ChunkT]):
     """Base class for asynchronous instrumented stream wrappers.
 
     Subclass this when wrapping a provider SDK stream that is consumed with
@@ -159,10 +190,11 @@ class AsyncStreamWrapper(ABC, Generic[ChunkT]):
     are owned by this base class.
     """
 
-    def __init__(self, stream: Any):
-        self.stream = stream
-        self._aiter = aiter(stream)
-        self._finalized = False
+    def __init__(self, stream: _AsyncStream[ChunkT]):
+        super().__init__(stream)
+        self._self_stream = stream
+        self._self_aiter = aiter(stream)
+        self._self_finalized = False
 
     async def __aenter__(self):
         return self
@@ -173,10 +205,10 @@ class AsyncStreamWrapper(ABC, Generic[ChunkT]):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> Literal[False]:
-        if exc_type is not None:
-            self._safe_finalize_failure(exc_val or Exception())
+        if exc_val is not None:
+            self._safe_finalize_failure(exc_val)
             try:
-                await self.stream.close()
+                await self._self_stream.close()
             except Exception:  # pylint: disable=broad-exception-caught
                 _logger.debug(
                     "GenAI stream close error after user exception",
@@ -188,19 +220,24 @@ class AsyncStreamWrapper(ABC, Generic[ChunkT]):
         return False
 
     async def close(self) -> None:
+        # Named ``close`` (not ``aclose``) to match OpenAI's ``AsyncStream``.
+        # Revisit when migrating SDKs that expose ``aclose`` instead.
         try:
-            await self.stream.close()
+            await self._self_stream.close()
         except Exception as error:
             self._safe_finalize_failure(error)
             raise
         self._safe_finalize_success()
 
     def __aiter__(self):
+        # Override ``ObjectProxy.__aiter__`` so iteration drives ``__anext__``
+        # below and runs ``_process_chunk`` per chunk; otherwise iteration
+        # would be forwarded to the wrapped stream and bypass instrumentation.
         return self
 
     async def __anext__(self) -> ChunkT:
         try:
-            chunk = await anext(self._aiter)
+            chunk = await anext(self._self_aiter)
         except StopAsyncIteration:
             self._safe_finalize_success()
             raise
@@ -213,19 +250,16 @@ class AsyncStreamWrapper(ABC, Generic[ChunkT]):
             self._handle_process_chunk_error(error)
         return chunk
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.stream, name)
-
     def _finalize_success(self) -> None:
-        if self._finalized:
+        if self._self_finalized:
             return
-        self._finalized = True
+        self._self_finalized = True
         self._stop_stream()
 
     def _finalize_failure(self, error: BaseException) -> None:
-        if self._finalized:
+        if self._self_finalized:
             return
-        self._finalized = True
+        self._self_finalized = True
         self._fail_stream(error)
 
     def _safe_finalize_success(self) -> None:

@@ -1056,13 +1056,13 @@ def test_chat_completion_streaming_user_exception_wins_over_close_exception(
 
     with vcr.use_cassette("test_chat_completion_streaming.yaml"):
         response = openai_client.chat.completions.create(**kwargs)
-        original_close = response.stream.close
+        original_close = response.__wrapped__.close
 
         def close_raises():
             original_close()
             raise RuntimeError("close failure")
 
-        monkeypatch.setattr(response.stream, "close", close_raises)
+        monkeypatch.setattr(response.__wrapped__, "close", close_raises)
         with pytest.raises(RuntimeError, match="user failure"):
             with response:
                 raise RuntimeError("user failure")
@@ -1086,13 +1086,13 @@ def test_chat_completion_streaming_close_exception_propagates_when_first(
 
     with vcr.use_cassette("test_chat_completion_streaming.yaml"):
         response = openai_client.chat.completions.create(**kwargs)
-        original_close = response.stream.close
+        original_close = response.__wrapped__.close
 
         def close_raises():
             original_close()
             raise RuntimeError("close failure")
 
-        monkeypatch.setattr(response.stream, "close", close_raises)
+        monkeypatch.setattr(response.__wrapped__, "close", close_raises)
         with pytest.raises(RuntimeError, match="close failure"):
             response.close()
 
