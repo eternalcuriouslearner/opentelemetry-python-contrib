@@ -144,10 +144,10 @@ class _ChatStreamMixin:
 
         self._self_invocation.output_messages = output_messages
 
-    def _stop_stream(self) -> None:
+    def _on_stream_end(self) -> None:
         self._cleanup()
 
-    def _fail_stream(self, error: BaseException) -> None:
+    def _on_stream_error(self, error: BaseException) -> None:
         self._cleanup(error)
 
     def parse(self):

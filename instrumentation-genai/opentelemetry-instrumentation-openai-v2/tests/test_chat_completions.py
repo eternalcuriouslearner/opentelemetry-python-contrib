@@ -1115,7 +1115,7 @@ def test_chat_completion_streaming_instrumentation_finalize_errors_swallowed(
         def stop_raises():
             raise RuntimeError("instrumentation failure")
 
-        monkeypatch.setattr(response, "_stop_stream", stop_raises)
+        monkeypatch.setattr(response, "_on_stream_end", stop_raises)
         response.close()
 
     assert span_exporter.get_finished_spans() == ()

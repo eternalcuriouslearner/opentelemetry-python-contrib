@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pylint: disable=abstract-class-instantiated
+
 import asyncio
 import inspect
 
@@ -26,8 +28,8 @@ from opentelemetry.util.genai.stream import (
 def test_stream_wrapper_abstract_method_signatures_match():
     method_names = (
         "_process_chunk",
-        "_stop_stream",
-        "_fail_stream",
+        "_on_stream_end",
+        "_on_stream_error",
         "_handle_process_chunk_error",
     )
 
@@ -86,10 +88,10 @@ class _TestSyncStreamWrapper(SyncStreamWrapper):
     def _process_chunk(self, chunk):
         self._self_processed.append(chunk)
 
-    def _stop_stream(self):
+    def _on_stream_end(self):
         self._self_stop_count += 1
 
-    def _fail_stream(self, error):
+    def _on_stream_error(self, error):
         self._self_failures.append(error)
 
 
@@ -99,13 +101,13 @@ class _FailingSyncProcessStreamWrapper(_TestSyncStreamWrapper):
 
 
 class _FailingSyncStopStreamWrapper(_TestSyncStreamWrapper):
-    def _stop_stream(self):
+    def _on_stream_end(self):
         self._self_stop_count += 1
         raise ValueError("instrumentation failed")
 
 
 class _FailingSyncFailStreamWrapper(_TestSyncStreamWrapper):
-    def _fail_stream(self, error):
+    def _on_stream_error(self, error):
         self._self_failures.append(error)
         raise ValueError("instrumentation failed")
 
@@ -325,10 +327,10 @@ class _TestAsyncStreamWrapper(AsyncStreamWrapper):
     def _process_chunk(self, chunk):
         self._self_processed.append(chunk)
 
-    def _stop_stream(self):
+    def _on_stream_end(self):
         self._self_stop_count += 1
 
-    def _fail_stream(self, error):
+    def _on_stream_error(self, error):
         self._self_failures.append(error)
 
 
@@ -338,13 +340,13 @@ class _FailingAsyncProcessStreamWrapper(_TestAsyncStreamWrapper):
 
 
 class _FailingAsyncStopStreamWrapper(_TestAsyncStreamWrapper):
-    def _stop_stream(self):
+    def _on_stream_end(self):
         self._self_stop_count += 1
         raise ValueError("instrumentation failed")
 
 
 class _FailingAsyncFailStreamWrapper(_TestAsyncStreamWrapper):
-    def _fail_stream(self, error):
+    def _on_stream_error(self, error):
         self._self_failures.append(error)
         raise ValueError("instrumentation failed")
 

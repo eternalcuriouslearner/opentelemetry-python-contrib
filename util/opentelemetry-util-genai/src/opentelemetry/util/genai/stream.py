@@ -67,8 +67,8 @@ class SyncStreamWrapper(
     Subclass this when wrapping a provider SDK stream that is consumed with
     normal iteration. The subclass should pass the SDK stream to
     ``super().__init__(stream)`` and implement the three telemetry hooks:
-    ``_process_chunk`` for per-chunk state, ``_stop_stream`` for successful
-    finalization, and ``_fail_stream`` for failure finalization.
+    ``_process_chunk`` for per-chunk state, ``_on_stream_end`` for successful
+    finalization, and ``_on_stream_error`` for failure finalization.
 
     Users should consume subclasses as normal streams, for example with
     ``for chunk in wrapper`` or ``with wrapper``. The hook methods are called
@@ -137,13 +137,13 @@ class SyncStreamWrapper(
         if self._self_finalized:
             return
         self._self_finalized = True
-        self._stop_stream()
+        self._on_stream_end()
 
     def _finalize_failure(self, error: BaseException) -> None:
         if self._self_finalized:
             return
         self._self_finalized = True
-        self._fail_stream(error)
+        self._on_stream_error(error)
 
     def _safe_finalize_success(self) -> None:
         try:
@@ -168,11 +168,11 @@ class SyncStreamWrapper(
         """Process one stream chunk for telemetry."""
 
     @abstractmethod
-    def _stop_stream(self) -> None:
+    def _on_stream_end(self) -> None:
         """Finalize the stream successfully."""
 
     @abstractmethod
-    def _fail_stream(self, error: BaseException) -> None:
+    def _on_stream_error(self, error: BaseException) -> None:
         """Finalize the stream with failure."""
 
     @staticmethod
@@ -193,8 +193,8 @@ class AsyncStreamWrapper(
     Subclass this when wrapping a provider SDK stream that is consumed with
     async iteration. The subclass should pass the SDK stream to
     ``super().__init__(stream)`` and implement the three telemetry hooks:
-    ``_process_chunk`` for per-chunk state, ``_stop_stream`` for successful
-    finalization, and ``_fail_stream`` for failure finalization.
+    ``_process_chunk`` for per-chunk state, ``_on_stream_end`` for successful
+    finalization, and ``_on_stream_error`` for failure finalization.
 
     Users should consume subclasses as normal async streams, for example with
     ``async for chunk in wrapper`` or ``async with wrapper``. The hook methods
@@ -266,13 +266,13 @@ class AsyncStreamWrapper(
         if self._self_finalized:
             return
         self._self_finalized = True
-        self._stop_stream()
+        self._on_stream_end()
 
     def _finalize_failure(self, error: BaseException) -> None:
         if self._self_finalized:
             return
         self._self_finalized = True
-        self._fail_stream(error)
+        self._on_stream_error(error)
 
     def _safe_finalize_success(self) -> None:
         try:
@@ -297,11 +297,11 @@ class AsyncStreamWrapper(
         """Process one stream chunk for telemetry."""
 
     @abstractmethod
-    def _stop_stream(self) -> None:
+    def _on_stream_end(self) -> None:
         """Finalize the stream successfully."""
 
     @abstractmethod
-    def _fail_stream(self, error: BaseException) -> None:
+    def _on_stream_error(self, error: BaseException) -> None:
         """Finalize the stream with failure."""
 
     @staticmethod
