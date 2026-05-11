@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 from types import TracebackType
 from typing import (
     AsyncIterable,
@@ -41,6 +41,10 @@ _ChunkT_co = TypeVar("_ChunkT_co", covariant=True)
 _logger = logging.getLogger(__name__)
 
 
+class _StreamWrapperMeta(ABCMeta, type(_ObjectProxy)):
+    """Metaclass compatible with wrapt's proxy type and ABC hooks."""
+
+
 class _SyncStream(Iterable[_ChunkT_co], Protocol[_ChunkT_co]):
     """Structural type for streams accepted by ``SyncStreamWrapper``."""
 
@@ -53,7 +57,11 @@ class _AsyncStream(AsyncIterable[_ChunkT_co], Protocol[_ChunkT_co]):
     async def close(self) -> None: ...
 
 
-class SyncStreamWrapper(_ObjectProxy, ABC, Generic[ChunkT]):
+class SyncStreamWrapper(
+    _ObjectProxy,
+    Generic[ChunkT],
+    metaclass=_StreamWrapperMeta,
+):
     """Base class for synchronous instrumented stream wrappers.
 
     Subclass this when wrapping a provider SDK stream that is consumed with
@@ -175,7 +183,11 @@ class SyncStreamWrapper(_ObjectProxy, ABC, Generic[ChunkT]):
         )
 
 
-class AsyncStreamWrapper(_ObjectProxy, ABC, Generic[ChunkT]):
+class AsyncStreamWrapper(
+    _ObjectProxy,
+    Generic[ChunkT],
+    metaclass=_StreamWrapperMeta,
+):
     """Base class for asynchronous instrumented stream wrappers.
 
     Subclass this when wrapping a provider SDK stream that is consumed with
