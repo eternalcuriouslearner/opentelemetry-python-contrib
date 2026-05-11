@@ -125,7 +125,7 @@ class _ChatStreamMixin:
                 )
             if choice.tool_calls_buffers:
                 tool_calls = []
-                for tool_call in choice.tool_calls_buffers:
+                for tool_call in filter(None, choice.tool_calls_buffers):
                     arguments = None
                     arguments_str = "".join(tool_call.arguments)
                     if arguments_str:

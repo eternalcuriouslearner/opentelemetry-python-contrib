@@ -770,7 +770,7 @@ class LegacyChatStreamWrapper(BaseStreamWrapper):
                 message["content"] = "".join(choice.text_content)
             if choice.tool_calls_buffers:
                 tool_calls = []
-                for tool_call in choice.tool_calls_buffers:
+                for tool_call in filter(None, choice.tool_calls_buffers):
                     function = {"name": tool_call.function_name}
                     if self.capture_content:
                         function["arguments"] = "".join(tool_call.arguments)
