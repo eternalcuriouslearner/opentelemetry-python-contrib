@@ -7,12 +7,12 @@ import logging
 from abc import ABCMeta, abstractmethod
 from types import TracebackType
 from typing import (
+    TYPE_CHECKING,
     AsyncIterable,
     Generic,
     Iterable,
     Literal,
     Protocol,
-    TYPE_CHECKING,
     TypeVar,
 )
 
