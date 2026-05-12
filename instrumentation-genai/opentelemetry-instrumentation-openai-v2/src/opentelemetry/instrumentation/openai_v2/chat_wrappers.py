@@ -67,8 +67,9 @@ class _ChatStreamMixin:
         if self._self_service_tier:
             return
 
-        if chunk.service_tier:
-            self._self_service_tier = chunk.service_tier
+        service_tier = getattr(chunk, "service_tier", None)
+        if service_tier:
+            self._self_service_tier = service_tier
 
     def _build_streaming_response(self, chunk: ChatCompletionChunk) -> None:
         if chunk.choices is None:
@@ -98,9 +99,10 @@ class _ChatStreamMixin:
                     )
 
     def _set_usage(self, chunk: ChatCompletionChunk) -> None:
-        if chunk.usage:
-            self._self_completion_tokens = chunk.usage.completion_tokens
-            self._self_prompt_tokens = chunk.usage.prompt_tokens
+        usage = getattr(chunk, "usage", None)
+        if usage:
+            self._self_completion_tokens = usage.completion_tokens
+            self._self_prompt_tokens = usage.prompt_tokens
 
     def _process_chunk(self, chunk: ChatCompletionChunk) -> None:
         self._set_response_id(chunk)
