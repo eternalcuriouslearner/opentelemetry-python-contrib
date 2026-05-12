@@ -15,9 +15,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Optional
 
 from openai import AsyncStream, Stream
+from openai.types.chat import ChatCompletionChunk
 
 from opentelemetry.semconv._incubating.attributes import (
     openai_attributes as OpenAIAttributes,
@@ -41,35 +42,35 @@ class _ChatStreamMixin:
 
     _self_invocation: InferenceInvocation
     _self_capture_content: bool
-    _self_choice_buffers: list
+    _self_choice_buffers: list[ChoiceBuffer]
     _self_response_id: Optional[str]
     _self_response_model: Optional[str]
     _self_service_tier: Optional[str]
     _self_prompt_tokens: Optional[int]
     _self_completion_tokens: Optional[int]
 
-    def _set_response_model(self, chunk):
+    def _set_response_model(self, chunk: ChatCompletionChunk) -> None:
         if self._self_response_model:
             return
 
         if chunk.model:
             self._self_response_model = chunk.model
 
-    def _set_response_id(self, chunk):
+    def _set_response_id(self, chunk: ChatCompletionChunk) -> None:
         if self._self_response_id:
             return
 
         if chunk.id:
             self._self_response_id = chunk.id
 
-    def _set_response_service_tier(self, chunk):
+    def _set_response_service_tier(self, chunk: ChatCompletionChunk) -> None:
         if self._self_service_tier:
             return
 
         if chunk.service_tier:
             self._self_service_tier = chunk.service_tier
 
-    def _build_streaming_response(self, chunk):
+    def _build_streaming_response(self, chunk: ChatCompletionChunk) -> None:
         if chunk.choices is None:
             return
 
@@ -96,19 +97,19 @@ class _ChatStreamMixin:
                         tool_call
                     )
 
-    def _set_usage(self, chunk):
+    def _set_usage(self, chunk: ChatCompletionChunk) -> None:
         if chunk.usage:
             self._self_completion_tokens = chunk.usage.completion_tokens
             self._self_prompt_tokens = chunk.usage.prompt_tokens
 
-    def _process_chunk(self, chunk):
+    def _process_chunk(self, chunk: ChatCompletionChunk) -> None:
         self._set_response_id(chunk)
         self._set_response_model(chunk)
         self._set_response_service_tier(chunk)
         self._build_streaming_response(chunk)
         self._set_usage(chunk)
 
-    def _set_output_messages(self):
+    def _set_output_messages(self) -> None:
         if not self._self_capture_content:  # optimization
             return
         output_messages = []
@@ -149,7 +150,7 @@ class _ChatStreamMixin:
     def _on_stream_error(self, error: BaseException) -> None:
         self._cleanup(error)
 
-    def parse(self):
+    def parse(self) -> _ChatStreamMixin:
         """Called when using with_raw_response with stream=True."""
         return self
 
@@ -182,14 +183,14 @@ class _ChatStreamMixin:
 
 class ChatStreamWrapper(
     _ChatStreamMixin,
-    SyncStreamWrapper[Any],
+    SyncStreamWrapper[ChatCompletionChunk],
 ):
     def __init__(
         self,
-        stream: Stream,
+        stream: Stream[ChatCompletionChunk],
         invocation: InferenceInvocation,
         capture_content: bool,
-    ):
+    ) -> None:
         super().__init__(stream)
         self._self_invocation = invocation
         self._self_choice_buffers = []
@@ -203,14 +204,14 @@ class ChatStreamWrapper(
 
 class AsyncChatStreamWrapper(
     _ChatStreamMixin,
-    AsyncStreamWrapper[Any],
+    AsyncStreamWrapper[ChatCompletionChunk],
 ):
     def __init__(
         self,
-        stream: AsyncStream,
+        stream: AsyncStream[ChatCompletionChunk],
         invocation: InferenceInvocation,
         capture_content: bool,
-    ):
+    ) -> None:
         super().__init__(stream)
         self._self_invocation = invocation
         self._self_choice_buffers = []
