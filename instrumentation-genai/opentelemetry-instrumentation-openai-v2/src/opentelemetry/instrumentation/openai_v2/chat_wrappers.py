@@ -52,29 +52,28 @@ class _ChatStreamMixin:
         if self._self_response_model:
             return
 
-        if getattr(chunk, "model", None):
+        if chunk.model:
             self._self_response_model = chunk.model
 
     def _set_response_id(self, chunk):
         if self._self_response_id:
             return
 
-        if getattr(chunk, "id", None):
+        if chunk.id:
             self._self_response_id = chunk.id
 
     def _set_response_service_tier(self, chunk):
         if self._self_service_tier:
             return
 
-        if getattr(chunk, "service_tier", None):
+        if chunk.service_tier:
             self._self_service_tier = chunk.service_tier
 
     def _build_streaming_response(self, chunk):
-        if getattr(chunk, "choices", None) is None:
+        if chunk.choices is None:
             return
 
-        choices = chunk.choices
-        for choice in choices:
+        for choice in chunk.choices:
             if not choice.delta:
                 continue
 
@@ -98,7 +97,7 @@ class _ChatStreamMixin:
                     )
 
     def _set_usage(self, chunk):
-        if getattr(chunk, "usage", None):
+        if chunk.usage:
             self._self_completion_tokens = chunk.usage.completion_tokens
             self._self_prompt_tokens = chunk.usage.prompt_tokens
 
